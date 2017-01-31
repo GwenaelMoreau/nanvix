@@ -88,22 +88,44 @@ PUBLIC void yield(void)
 
 	/* Choose a process to run next. */
 	next = IDLE;
+
 	for (p = FIRST_PROC; p <= LAST_PROC; p++)
 	{
 		/* Skip non-ready process. */
 		if (p->state != PROC_READY)
 			continue;
-		
+
+		/* If next is IDLE, set next to p */
+		if (next == IDLE)
+		{
+			next = p;
+			continue;
+		}
+
+		/* Process with higher priority found. */
+		if (p->priority < next->priority)
+			next = p;
+	}
+
+	/* At this time, next is a process with higher priority */
+
+	for (p = FIRST_PROC; p <= LAST_PROC; p++)
+	{
+		/* Skip non-ready or lower priority process. */
+		if (p->state != PROC_READY || p->priority > next->priority)
+			continue;
+
 		/*
 		 * Process with higher
-		 * waiting time found.
+		 * nice found or same nice
+		 * with higher waiting time
 		 */
-		if (p->counter > next->counter)
+		if (p->nice < next->nice || (p->nice == next->nice && p->counter > next->counter))
 		{
 			next->counter++;
 			next = p;
 		}
-			
+
 		/*
 		 * Increment waiting
 		 * time of process.
