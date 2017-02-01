@@ -154,6 +154,9 @@ found:
 	proc->alarm = 0;
 	proc->next = NULL;
 	proc->chain = NULL;
+	proc->nbQuantum=5;
+	proc->canBeElect=1;
+	proc->totalCounter=0;
 	sched(proc);
 
 	curr_proc->nchildren++;

@@ -120,7 +120,8 @@ PUBLIC void pm_init(void)
 	IDLE->alarm = 0;
 	IDLE->next = NULL;
 	IDLE->chain = NULL;
-	
+	IDLE->nbQuantum=1;
+	IDLE->canBeElect=1;
 	nprocs++;
 
 	enable_interrupts();

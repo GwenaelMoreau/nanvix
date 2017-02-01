@@ -204,6 +204,9 @@
     	unsigned alarm;          /**< Alarm.                  */
 		struct process *next;    /**< Next process in a list. */
 		struct process **chain;  /**< Sleeping chain.         */
+		int canBeElect;		 /**0:peut etre élu, 1: ne peut pas être élu jusqu'à que tout le monde l'ait été**/
+		int nbQuantum;		/**nb of quantum remaining to execute for the process **/
+		unsigned totalCounter;
 		/**@}*/
 	};
 	

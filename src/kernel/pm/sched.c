@@ -45,13 +45,6 @@ PUBLIC void stop(void)
 	yield();
 }
 
-/**
- * @brief Resumes a process.
- * 
- * @param proc Process to be resumed.
- * 
- * @note The process must stopped to be resumed.
- */
 PUBLIC void resume(struct process *proc)
 {	
 	/* Resume only if process has stopped. */
@@ -59,83 +52,91 @@ PUBLIC void resume(struct process *proc)
 		sched(proc);
 }
 
-/**
- * @brief Yields the processor.
- */
 PUBLIC void yield(void)
 {
 	struct process *p;    /* Working process.     */
 	struct process *next; /* Next process to run. */
 
+	// if every active process had the opportunity to run, canBeElect of every process is set to 1
+	static int hasToReset;
+	static unsigned highestTime;
+
+	//if every process has executed its quantums, then every process can be elected again
+	hasToReset=1;
+
+	for(p = FIRST_PROC; p <= LAST_PROC; p++)
+	{
+		if(p->canBeElect==1)
+		{
+			hasToReset=0;
+		}
+	}
+
+	if(hasToReset==1){
+		for(p = FIRST_PROC; p <= LAST_PROC; p++)
+		{
+			p->canBeElect=1;
+		}
+	}
+
+
+
+	//find the process which has used the CPU the longest
+	for (p = FIRST_PROC; p <= LAST_PROC; p++)
+	{
+		//on ignore IDLE
+		if (p == IDLE)
+			continue;
+
+		if(highestTime<=(p->utime+p->ktime))
+		{
+			highestTime=p->utime+p->ktime;
+		}
+	}
+
+
 	/* Re-schedule process for execution. */
 	if (curr_proc->state == PROC_RUNNING)
+	{
 		sched(curr_proc);
-
-	/* Remember this process. */
-	last_proc = curr_proc;
-
-	/* Check alarm. */
-	for (p = FIRST_PROC; p <= LAST_PROC; p++)
-	{
-		/* Skip invalid processes. */
-		if (!IS_VALID(p))
-			continue;
-		
-		/* Alarm has expired. */
-		if ((p->alarm) && (p->alarm < ticks))
-			p->alarm = 0, sndsig(p, SIGALRM);
 	}
 
-	/* Choose a process to run next. */
-	next = IDLE;
-
-	for (p = FIRST_PROC; p <= LAST_PROC; p++)
+	//if the process didnt execute every of his quantums
+	if(curr_proc->nbQuantum>0 && curr_proc->state==PROC_READY)
 	{
-		/* Skip non-ready process. */
-		if (p->state != PROC_READY)
-			continue;
+		next=curr_proc;
+		curr_proc->nbQuantum--;
+	}
+	else
+	{
+		/* Choose a process to run next. */
+		next = IDLE;
 
-		/* If next is IDLE, set next to p */
-		if (next == IDLE)
+		for (p = FIRST_PROC; p <= LAST_PROC; p++)
 		{
-			next = p;
-			continue;
-		}
+			/* Skip non-ready process. */
+			if (p->state != PROC_READY)
+				continue;
 
-		/* Process with higher priority found. */
-		if (p->priority < next->priority)
-			next = p;
+			/* If next is IDLE, set next to p */
+			if (next == IDLE)
+			{
+				next = p;
+				continue;
+			}
+
+			/* Process with higher priority found. */
+			if (p->canBeElect==1)
+			{
+				next = p;
+				p->canBeElect=0;
+				curr_proc->nbQuantum=((highestTime)+1)/((p->utime+p->ktime)+1);
+				break;
+			}
+		}
 	}
 
-	/* At this time, next is a process with higher priority */
-
-	for (p = FIRST_PROC; p <= LAST_PROC; p++)
-	{
-		/* Skip non-ready or lower priority process. */
-		if (p->state != PROC_READY || p->priority > next->priority)
-			continue;
-
-		/*
-		 * Process with higher
-		 * nice found or same nice
-		 * with higher waiting time
-		 */
-		if (p->nice < next->nice || (p->nice == next->nice && p->counter > next->counter))
-		{
-			next->counter++;
-			next = p;
-		}
-
-		/*
-		 * Increment waiting
-		 * time of process.
-		 */
-		else
-			p->counter++;
-	}
-	
 	/* Switch to next process. */
-	next->priority = PRIO_USER;
 	next->state = PROC_RUNNING;
 	next->counter = PROC_QUANTUM;
 	switch_to(next);
