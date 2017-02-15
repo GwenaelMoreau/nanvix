@@ -289,8 +289,8 @@ PRIVATE struct
 	unsigned age;   /**< Age.                 */
 	pid_t owner;    /**< Page owner.          */
 	addr_t addr;    /**< Address of the page. */
-
-} frames[NR_FRAMES] = {{0, 0, 0, 0},  };
+	unsigned counterLastRef;	/** nb of intervals since the last ref to the page **/
+} frames[NR_FRAMES] = {{0, 0, 0, 0, 0},  };
 
 /**
  * @brief Allocates a page frame.
@@ -342,15 +342,68 @@ PRIVATE struct
 // 	return (i);
 // }
 
+// PRIVATE int allocf(void)
+// {
+// 	static int i=0;      /* Loop index.  */
+// 	struct pte *pg; /* Page table entry.             */
+
+
+// 	while(1){
+// 		//page libre
+// 		if(frames[i].count==0){
+// 			goto found;
+// 		}
+
+// 		pg=getpte(curr_proc,frames[i].addr);
+
+// 		if(pg->accessed==1){
+// 			pg->accessed=0;
+// 		}
+// 		else{
+
+// 					/* Local page replacement policy. */
+// 		if (frames[i].owner == curr_proc->pid)
+// 		{
+// 			/* Skip shared pages. */
+// 			if (frames[i].count > 1)
+// 				continue;
+
+
+// 				/* Swap page out. */
+// 		if (swap_out(curr_proc, frames[i].addr)){
+// 			return (-1);
+// 		}
+	
+// 			goto found;
+// 		}
+
+
+// 		}
+// 			i=(i+1)%NR_FRAMES;
+
+// 	}
+
+
+	
+// found:		
+
+// 	frames[i].age = ticks;
+// 	frames[i].count = 1;
+	
+// 	return (i);
+// }
+
 PRIVATE int allocf(void)
 {
 	static int i=0;      /* Loop index.  */
 	struct pte *pg; /* Page table entry.             */
+	unsigned leastUsedFrame=0;
+	unsigned highestCounter=0;
 
-
-	while(1){
-		//page libre
+	for (i = 0; i < NR_FRAMES; i++)
+	{
 		if(frames[i].count==0){
+			leastUsedFrame=i;
 			goto found;
 		}
 
@@ -358,40 +411,47 @@ PRIVATE int allocf(void)
 
 		if(pg->accessed==1){
 			pg->accessed=0;
+			frames[i].counterLastRef=0;
 		}
 		else{
 
-					/* Local page replacement policy. */
-		if (frames[i].owner == curr_proc->pid)
-		{
-			/* Skip shared pages. */
-			if (frames[i].count > 1)
-				continue;
+			if (frames[i].owner == curr_proc->pid){
 
+				frames[i].counterLastRef++;
 
-				/* Swap page out. */
-		if (swap_out(curr_proc, frames[i].addr)){
-			return (-1);
+				if (frames[i].count > 1){
+					continue;
+				}
+
+				if(frames[i].counterLastRef>highestCounter){
+					leastUsedFrame=i;
+					highestCounter=frames[i].counterLastRef;
+				}
+				else{
+
+				}
+
+			}
+
 		}
-	
-			goto found;
-		}
-
-
-		}
-			i=(i+1)%NR_FRAMES;
 
 	}
 
 
-	
-found:		
+	if (swap_out(curr_proc, frames[i=leastUsedFrame].addr)){
+		return (-1);
+	}
+
+	found:
 
 	frames[i].age = ticks;
 	frames[i].count = 1;
-	
-	return (i);
+	return i;
+
 }
+
+
+
 
 /**
  * @brief Copies a page.
