@@ -36,6 +36,7 @@
 
 	/*
 	 * Page directory entry.
+	 page sur 32 bits
 	 */
 	struct pde
 	{

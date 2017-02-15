@@ -54,6 +54,13 @@
  * @param a Address.
  * 
  * @returns The requested page table entry.
+
+
+					  /K_BASE commence ici c'est où l'user peut écrire, le reste c'est OS
+ KBASE_VIRT : [OS|USER|OS]
+
+ PG(a) : given a virtual adress : give the offset dans la page table
+
  */
 #define getpte(p, a) \
 	(&((struct pte *)((getpde(p, a)->frame << PAGE_SHIFT) + KBASE_VIRT))[PG(a)])
@@ -278,10 +285,11 @@ PUBLIC void putkpg(void *kpg)
  */
 PRIVATE struct
 {
-	unsigned count; /**< Reference count.     */
+	unsigned count; /**< Reference count. if 1< then shared page */
 	unsigned age;   /**< Age.                 */
 	pid_t owner;    /**< Page owner.          */
 	addr_t addr;    /**< Address of the page. */
+
 } frames[NR_FRAMES] = {{0, 0, 0, 0},  };
 
 /**
@@ -290,41 +298,92 @@ PRIVATE struct
  * @returns Upon success, the number of the frame is returned. Upon failure, a
  *          negative number is returned instead.
  */
+// PRIVATE int allocf(void)
+// {
+// 	int i;      /* Loop index.  */
+// 	int oldest; /* Oldest page. */
+	
+// 	#define OLDEST(x, y) (frames[x].age < frames[y].age)
+	
+// 	/* Search for a free frame. */
+// 	oldest = -1;
+// 	for (i = 0; i < NR_FRAMES; i++)
+// 	{
+// 		/* Found it. */
+// 		if (frames[i].count == 0)
+// 			goto found;
+		
+// 		/* Local page replacement policy. */
+// 		if (frames[i].owner == curr_proc->pid)
+// 		{
+// 			 Skip shared pages. 
+// 			if (frames[i].count > 1)
+// 				continue;
+			
+// 			/* Oldest page found. */
+// 			if ((oldest < 0) || (OLDEST(i, oldest)))
+// 				oldest = i;
+// 		}
+// 	}
+	
+// 	/* No frame left. */
+// 	if (oldest < 0)
+// 		return (-1);
+	
+// 	/* Swap page out. */
+// 	if (swap_out(curr_proc, frames[i = oldest].addr))
+// 		return (-1);
+	
+// found:		
+
+// 	frames[i].age = ticks;
+// 	frames[i].count = 1;
+	
+// 	return (i);
+// }
+
 PRIVATE int allocf(void)
 {
-	int i;      /* Loop index.  */
-	int oldest; /* Oldest page. */
-	
-	#define OLDEST(x, y) (frames[x].age < frames[y].age)
-	
-	/* Search for a free frame. */
-	oldest = -1;
-	for (i = 0; i < NR_FRAMES; i++)
-	{
-		/* Found it. */
-		if (frames[i].count == 0)
+	static int i=0;      /* Loop index.  */
+	struct pte *pg; /* Page table entry.             */
+
+
+	while(1){
+		//page libre
+		if(frames[i].count==0){
 			goto found;
-		
-		/* Local page replacement policy. */
+		}
+
+		pg=getpte(curr_proc,frames[i].addr);
+
+		if(pg->accessed==1){
+			pg->accessed=0;
+		}
+		else{
+
+					/* Local page replacement policy. */
 		if (frames[i].owner == curr_proc->pid)
 		{
 			/* Skip shared pages. */
 			if (frames[i].count > 1)
 				continue;
-			
-			/* Oldest page found. */
-			if ((oldest < 0) || (OLDEST(i, oldest)))
-				oldest = i;
+
+
+				/* Swap page out. */
+		if (swap_out(curr_proc, frames[i].addr)){
+			return (-1);
 		}
+	
+			goto found;
+		}
+
+
+		}
+			i=(i+1)%NR_FRAMES;
+
 	}
-	
-	/* No frame left. */
-	if (oldest < 0)
-		return (-1);
-	
-	/* Swap page out. */
-	if (swap_out(curr_proc, frames[i = oldest].addr))
-		return (-1);
+
+
 	
 found:		
 
