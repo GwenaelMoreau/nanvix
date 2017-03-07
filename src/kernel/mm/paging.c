@@ -298,6 +298,7 @@ PRIVATE struct
  * @returns Upon success, the number of the frame is returned. Upon failure, a
  *          negative number is returned instead.
  */
+
 // PRIVATE int allocf(void)
 // {
 // 	int i;      /* Loop index.  */
@@ -316,7 +317,7 @@ PRIVATE struct
 // 		/* Local page replacement policy. */
 // 		if (frames[i].owner == curr_proc->pid)
 // 		{
-// 			 Skip shared pages. 
+// 			 // Skip shared pages. 
 // 			if (frames[i].count > 1)
 // 				continue;
 			
@@ -330,6 +331,7 @@ PRIVATE struct
 // 	if (oldest < 0)
 // 		return (-1);
 	
+// 	//kprintf("swap %d", oldest);
 // 	/* Swap page out. */
 // 	if (swap_out(curr_proc, frames[i = oldest].addr))
 // 		return (-1);
@@ -342,10 +344,14 @@ PRIVATE struct
 // 	return (i);
 // }
 
+
+/* second chance algortithm
+	-> if a page has not been used since the last page fault, it's chosen for remplacement
+*/
 // PRIVATE int allocf(void)
 // {
-// 	static int i=0;      /* Loop index.  */
-// 	struct pte *pg; /* Page table entry.             */
+// 	static int i=0; /* Loop index.  */
+// 	struct pte *pg; /* Page table entry. */
 
 
 // 	while(1){
@@ -354,38 +360,40 @@ PRIVATE struct
 // 			goto found;
 // 		}
 
+// 		/* we get the pte of the frame */
 // 		pg=getpte(curr_proc,frames[i].addr);
 
+// 		/* has the page been accessed ? */
 // 		if(pg->accessed==1){
 // 			pg->accessed=0;
 // 		}
-// 		else{
+// 		else{	 if not we can elect it as remplacement 
 
-// 					/* Local page replacement policy. */
-// 		if (frames[i].owner == curr_proc->pid)
-// 		{
-// 			/* Skip shared pages. */
-// 			if (frames[i].count > 1)
-// 				continue;
+// 			/* Local page replacement policy. */
+// 			if (frames[i].owner == curr_proc->pid)
+// 			{
+// 				/* Skip shared pages. */
+// 				if (frames[i].count > 1)
+// 					continue;
+
+// 			/* Swap page out. */
+// 				if (swap_out(curr_proc, frames[i].addr))
+// 					return (-1);
+				
+// 				goto found;
+// 			}
+		
 
 
-// 				/* Swap page out. */
-// 		if (swap_out(curr_proc, frames[i].addr)){
-// 			return (-1);
 // 		}
 	
-// 			goto found;
-// 		}
-
-
-// 		}
-// 			i=(i+1)%NR_FRAMES;
+// 		i=(i+1)%NR_FRAMES;
 
 // 	}
 
 
 	
-// found:		
+// found:
 
 // 	frames[i].age = ticks;
 // 	frames[i].count = 1;
@@ -393,51 +401,157 @@ PRIVATE struct
 // 	return (i);
 // }
 
+
+/* LRU algorithm
+-> difference with second chance : here we select the one which has been used the longest time ago
+*/
+
+
+// PRIVATE int allocf(void)
+// {
+// 	static int i=0;      /* Loop index.  */
+// 	struct pte *pg;		 /* Page table entry.             */
+// 	unsigned leastUsedFrame=0;	/* indice of the  */
+// 	unsigned highestCounter=0;
+
+// 	for (i = 0; i < NR_FRAMES; i++)
+// 	{
+// 		/* if the page is not used by any process */
+// 		if(frames[i].count==0){
+// 			//kprintf("personne utilise");
+// 			leastUsedFrame=i;
+// 			goto found;
+// 		}
+
+// 		pg=getpte(curr_proc,frames[i].addr);
+
+// 		/* if the page has been accessed, we reset the counter since last ref */
+// 		if(pg->accessed==1){
+// 			pg->accessed=0;
+// 			frames[i].counterLastRef=0;
+// 		}
+// 		else{
+
+// 			if (frames[i].owner == curr_proc->pid){
+
+// 				/* incrementing the frame counter since last use */
+// 				frames[i].counterLastRef++;
+
+// 				/* skip shared pages */
+// 				if (frames[i].count > 1){
+// 					continue;
+// 				}
+
+// 				/* finding the least recently used frame */
+// 				if(frames[i].counterLastRef>highestCounter){
+// 					leastUsedFrame=i;
+// 					highestCounter=frames[i].counterLastRef;
+// 				}
+// 				else{
+
+// 				}
+
+// 			}
+
+// 		}
+
+// 	}
+
+
+// 	//kprintf("swap %d", leastUsedFrame);
+// 	frames[leastUsedFrame].counterLastRef=0;
+// 	if (swap_out(curr_proc, frames[i=leastUsedFrame].addr)){
+// 		return (-1);
+// 	}
+
+// 	found:
+
+// 	frames[i].age = ticks;
+// 	frames[i].count = 1000
+// 	return i;
+
+// }
+
+/* LRU approx -> 
+	increment the counter only every n allocf()
+	*/
+
 PRIVATE int allocf(void)
 {
 	static int i=0;      /* Loop index.  */
-	struct pte *pg; /* Page table entry.             */
-	unsigned leastUsedFrame=0;
+	struct pte *pg;		 /* Page table entry.             */
+	unsigned leastUsedFrame=0;	/* indice of the least used frame  */
 	unsigned highestCounter=0;
+	static unsigned LRU_bound=50; /*bound : do the treatment every LRU_bound */
+	static unsigned LRU_treatment=0;
 
-	for (i = 0; i < NR_FRAMES; i++)
-	{
-		if(frames[i].count==0){
-			leastUsedFrame=i;
-			goto found;
-		}
+	LRU_treatment++;
 
-		pg=getpte(curr_proc,frames[i].addr);
+	if(LRU_treatment==LRU_bound){
 
-		if(pg->accessed==1){
-			pg->accessed=0;
-			frames[i].counterLastRef=0;
-		}
-		else{
+		LRU_treatment=1;
 
-			if (frames[i].owner == curr_proc->pid){
+		for (i = 0; i < NR_FRAMES; i++)
+		{
+			/* if the page is not used by any process */
+			if(frames[i].count==0){
+				leastUsedFrame=i;
+				goto found;
+			}
 
-				frames[i].counterLastRef++;
+			pg=getpte(curr_proc,frames[i].addr);
 
-				if (frames[i].count > 1){
-					continue;
-				}
+			/* if the page has been accessed, we reset the counter since last ref */
+			if(pg->accessed==1){
+				pg->accessed=0;
+				frames[i].counterLastRef=0;
+			}
+			else{
 
-				if(frames[i].counterLastRef>highestCounter){
-					leastUsedFrame=i;
-					highestCounter=frames[i].counterLastRef;
-				}
-				else{
+				if (frames[i].owner == curr_proc->pid){
+
+					/* incrementing the frame counter since last use */
+					frames[i].counterLastRef++;
+
+					/* skip shared pages */
+					if (frames[i].count > 1){
+						continue;
+					}
+					
+					/* finding the least recently used frame */
+					if(frames[i].counterLastRef>highestCounter){
+						leastUsedFrame=i;
+						highestCounter=frames[i].counterLastRef;
+					}
+					else{
+
+					}
 
 				}
 
 			}
-
 		}
+	}
+	else{
 
+		for (i = 0; i < NR_FRAMES; i++)
+		{
+			if(frames[i].count==0){
+				leastUsedFrame=i;
+				goto found;
+			}
+			else{
+				if(frames[i].counterLastRef>highestCounter){
+					leastUsedFrame=i;
+					highestCounter=frames[i].counterLastRef;
+				}	
+			}
+		}
 	}
 
-
+	//kprintf("swap %d", leastUsedFrame);
+	frames[leastUsedFrame].counterLastRef=0;
+	
 	if (swap_out(curr_proc, frames[i=leastUsedFrame].addr)){
 		return (-1);
 	}
@@ -449,7 +563,6 @@ PRIVATE int allocf(void)
 	return i;
 
 }
-
 
 
 
